@@ -1,0 +1,119 @@
+# Конфигурация системы прогноза поездок велопроката.
+# Любой параметр из ENV_OVERRIDES (src/config.py) можно переопределить переменной окружения или в .env
+
+project:
+  city: Chicago
+  timezone: America/Chicago
+  seed: 42
+
+paths:
+  data_dir: data
+  db: data/mobility.duckdb
+
+duckdb:
+  memory_limit: 1GB       # на слабой машине уменьшить через DUCKDB_MEMORY_LIMIT
+  threads: 4
+
+divvy:
+  bucket_url: https://divvy-tripdata.s3.amazonaws.com
+  start_month: "2024-01"   # с какого месяца грузить историю
+  end_month: null          # null = до последнего опубликованного
+
+weather:
+  archive_url: https://archive-api.open-meteo.com/v1/archive
+  latitude: 41.88
+  longitude: -87.63
+  start_date: "2024-01-01"
+  archive_lag_days: 6      # архив Open-Meteo отстаёт от текущей даты на ~5 дней
+  daily_vars:
+    - temperature_2m_mean
+    - temperature_2m_max
+    - temperature_2m_min
+    - apparent_temperature_mean
+    - precipitation_sum
+    - rain_sum
+    - snowfall_sum
+    - precipitation_hours
+    - wind_speed_10m_max
+    - sunshine_duration
+
+gbfs:
+  station_information: https://gbfs.lyft.com/gbfs/1.1/chi/en/station_information.json
+  station_status: https://gbfs.lyft.com/gbfs/1.1/chi/en/station_status.json
+
+areas:
+  geojson_url: https://data.cityofchicago.org/resource/igwz-8jzy.geojson
+
+http:
+  timeout: 60
+  retries: 5
+  backoff: 2
+
+cleaning:
+  min_duration_min: 1
+  max_duration_hours: 24
+  coord_precision: 3       # округление координат перед привязкой к району (~100 м)
+
+model:
+  target: n_trips
+  holdout_start: "2026-07-01"   # отложенная выборка: не участвует ни в обучении, ни в выборе модели
+  holdout_end: "2026-09-30"     # данные позже — «эксплуатация»: на них работает мониторинг
+  cv_folds: 5                   # окна валидации с расширяющимся обучающим множеством
+  cv_fold_days: 61
+  lags: [1, 2, 7, 14, 21, 28]
+  windows: [7, 28]
+  weather_features:
+    - temperature_2m_mean
+    - temperature_2m_max
+    - apparent_temperature_mean
+    - precipitation_sum
+    - precipitation_hours
+    - snowfall_sum
+    - wind_speed_10m_max
+    - sunshine_duration
+  ridge:
+    alpha: 3.0
+  lightgbm:
+    objective: poisson
+    n_estimators: 700
+    learning_rate: 0.03
+    num_leaves: 31
+    min_child_samples: 30
+    subsample: 0.8
+    subsample_freq: 1
+    colsample_bytree: 0.8
+    verbose: -1
+
+experiments:
+  n_trials: 25                 # число конфигураций в автоматическом подборе (Optuna, TPE)
+  models: [lightgbm, ridge]    # среди каких классов моделей ищем
+  optional_groups: [lags, rolling, trip_log]   # группы признаков, включение которых тоже подбирается
+
+monitoring:
+  window_days: 28              # окно свежих фактических данных для оценки качества и дрейфа
+  reference_days: 365          # запасной эталон, если нет того же периода прошлого года
+  psi_threshold: 0.25          # PSI > 0.25 — существенный сдвиг распределения признака
+  ks_alpha: 0.01               # и сдвиг статистически значим (тест Колмогорова–Смирнова по дневным значениям)
+  drift_share_threshold: 0.30  # доля дрейфующих признаков, при которой срабатывает правило
+  critical_psi: 1.0            # одиночный сдвиг такой силы — аномалия входных данных (сбой источника)
+  wape_degradation: 1.30       # WAPE на окне > 1.3 × WAPE модели на валидации — деградация
+  max_model_age_days: 92       # модель старше квартала от конца обучающих данных — плановое переобучение
+  promotion_min_gain: 0.02     # новая версия выводится, если WAPE ниже текущей хотя бы на 2%
+  rollback_tolerance: 0.05     # откат, если текущая версия хуже предыдущей на свежем окне более чем на 5%
+  promotion_eval_days: 14      # окно сравнения «текущая версия против претендента»
+  monitored_features:
+    - lag_1
+    - roll_mean_7
+    - roll_mean_28
+    - same_dow_mean_4w
+    - share_member_7
+    - share_electric_7
+    - median_duration_7
+    - temperature_2m_mean
+    - precipitation_sum
+    - sunshine_duration
+    - wind_speed_10m_max
+
+dashboard:
+  snapshot_db: data/dashboard.duckdb   # копия БД для дашборда: пайплайн пишет, дашборд читает
+  cache_ttl_seconds: 600

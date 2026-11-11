@@ -1,0 +1,12 @@
+data/
+.env
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+mlruns/
+.pytest_cache/
+report/toc.json
+report/headings.json
+report/~$*
+*.tmp
