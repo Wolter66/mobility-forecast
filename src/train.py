@@ -56,6 +56,11 @@ def research_dataset(con, cfg: dict) -> tuple[pd.DataFrame, str]:
 
     Данные после holdout_end — период эксплуатации, в обучении и выборе модели не участвуют.
     """
+    tables = set(con.execute("select table_name from information_schema.tables").df()["table_name"])
+    if "daily_area" not in tables:
+        raise SystemExit("Нет витрины daily_area: сначала загрузите данные и соберите витрину —\n"
+                         "  python -m src.ingest all\n  python -m src.processing.build_mart\n"
+                         "(или сразу полный цикл: python -m src.pipeline)")
     mart = con.execute("select * from daily_area where date <= ? order by area_num, date",
                        [cfg["model"]["holdout_end"]]).df()
     feats = complete_rows(build_features(mart, cfg, area_categories(con)), cfg)
