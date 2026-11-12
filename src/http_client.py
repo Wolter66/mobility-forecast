@@ -5,6 +5,7 @@ import time
 import requests
 
 log = logging.getLogger(__name__)
+HEADERS = {"User-Agent": "mobility-forecast/1.0 (student project; +https://github.com)"}
 
 
 class SourceUnavailable(Exception):
@@ -16,8 +17,8 @@ def get(url: str, *, params: dict | None = None, timeout: int = 60, retries: int
     for attempt in range(1, retries + 1):
         wait = backoff ** attempt
         try:
-            resp = requests.get(url, params=params, timeout=timeout, stream=stream)
-        except (requests.ConnectionError, requests.Timeout) as exc:
+            resp = requests.get(url, params=params, timeout=timeout, stream=stream, headers=HEADERS)
+        except requests.RequestException as exc:  # таймаут, обрыв соединения, неполный ответ
             log.warning("%s: попытка %d/%d, сетевая ошибка: %s", url, attempt, retries, exc)
         else:
             if resp.status_code == 429:

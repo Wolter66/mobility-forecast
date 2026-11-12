@@ -1,4 +1,5 @@
 """Справочники: границы районов Чикаго (GeoJSON, Chicago Data Portal) и праздники США/Иллинойса."""
+import json
 import logging
 from datetime import date
 
@@ -6,10 +7,12 @@ import holidays
 import pandas as pd
 from shapely.geometry import shape
 
-from src.http_client import get
+from src.config import ROOT
+from src.http_client import SourceUnavailable, get
 from src.ingest.load_log import log_skip, logged_run
 
 log = logging.getLogger(__name__)
+LOCAL_AREAS = ROOT / "resources" / "chicago_community_areas.geojson"
 
 
 def load_areas(con, cfg: dict, force: bool = False) -> None:
@@ -17,8 +20,14 @@ def load_areas(con, cfg: dict, force: bool = False) -> None:
         log_skip(con, "areas", "all", "справочник районов уже загружен")
         return
     with logged_run(con, "areas", "all") as stats:
-        gj = get(cfg["areas"]["geojson_url"], params={"$limit": 1000},
-                 timeout=cfg["http"]["timeout"], retries=cfg["http"]["retries"]).json()
+        try:
+            gj = get(cfg["areas"]["geojson_url"], params={"$limit": 1000},
+                     timeout=cfg["http"]["timeout"], retries=cfg["http"]["retries"]).json()
+        except (SourceUnavailable, ValueError) as exc:
+            # границы районов почти не меняются: при недоступности портала берём копию из репозитория
+            log.warning("портал недоступен (%s), границы районов берутся из %s", exc, LOCAL_AREAS.name)
+            gj = json.loads(LOCAL_AREAS.read_text(encoding="utf-8"))
+            stats["message"] = "локальная копия resources/chicago_community_areas.geojson"
         rows = [{
             "area_num": int(f["properties"]["area_numbe"]),
             "name": f["properties"]["community"].title(),

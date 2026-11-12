@@ -4,7 +4,6 @@ import logging
 
 from src.config import load_config
 from src.db import connect
-from src.http_client import SourceUnavailable
 from src.ingest import divvy, gbfs, reference, weather
 
 STEPS = {
@@ -30,7 +29,7 @@ def main() -> None:
             continue
         try:
             step(con, cfg)
-        except (SourceUnavailable, ValueError, KeyError) as exc:
+        except Exception as exc:  # noqa: BLE001 — сбой одного источника не роняет остальные
             # недоступность одного источника не роняет загрузку остальных, ошибка уже в load_log
             logging.error("Источник %s пропущен: %s", name, exc)
             failed.append(name)
