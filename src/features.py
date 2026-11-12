@@ -64,14 +64,14 @@ def build_features(mart: pd.DataFrame, cfg: dict, area_categories: list[int]) ->
 
     # календарь (известен заранее)
     d = df["date"]
-    out["dow"] = d.dt.dayofweek
+    out["dow"] = d.dt.day_of_week
     out["month"] = d.dt.month
     out["is_weekend"] = (out["dow"] >= 5).astype(int)
     out["is_holiday"] = df["is_holiday"].astype(int)
     holiday_dates = set(d[df["is_holiday"]])
     out["holiday_near"] = (d - pd.Timedelta(days=1)).isin(holiday_dates) | (d + pd.Timedelta(days=1)).isin(holiday_dates)
     out["holiday_near"] = out["holiday_near"].astype(int)
-    doy = d.dt.dayofyear
+    doy = d.dt.day_of_year
     out["doy_sin"] = np.sin(2 * np.pi * doy / 365.25)
     out["doy_cos"] = np.cos(2 * np.pi * doy / 365.25)
 

@@ -78,6 +78,9 @@ def save_table(con, table: str, df: pd.DataFrame) -> None:
 
 
 def _save(con, table: str, df: pd.DataFrame) -> None:
+    # если у соединения остался недочитанный результат (fetchone), новые версии DuckDB не дают
+    # регистрировать DataFrame — закрываем его пустым запросом
+    con.execute("select 1").fetchall()
     con.register("tmp_df", df)
     con.execute(f"create table if not exists {table} as select * from tmp_df limit 0")
     con.execute(f"insert into {table} by name select * from tmp_df")
